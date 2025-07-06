@@ -9,9 +9,11 @@ mod player;
 pub use player::*;
 mod rect;
 pub use rect::Rect;
+mod visibility_system;
+use visibility_system::VisibilitySystem;
 
 struct State {
-    ecs: World,
+    pub ecs: World,
 }
 impl GameState for State {
     fn tick(&mut self, ctx: &mut Rltk) {
@@ -19,8 +21,10 @@ impl GameState for State {
         //ctx.print(1, 1, "Hello Rust");
         player_input(self, ctx);
         self.run_systems();
-        let map = self.ecs.fetch::<Vec<TileType>>();
-        draw_map(&map, ctx);
+        let map = self.ecs.fetch::<Map>();
+        //draw_map(&map, ctx);
+
+        draw_map(&self.ecs, ctx);
         let positions = self.ecs.read_storage::<Position>();
         let renderables = self.ecs.read_storage::<Renderable>();
 
@@ -30,24 +34,10 @@ impl GameState for State {
     }
 }
 
-//struct LeftWalker {}
-//impl<'a> System<'a> for LeftWalker {
-//    type SystemData = (ReadStorage<'a, LeftMover>, WriteStorage<'a, Position>);
-//
-//    fn run(&mut self, (lefty, mut pos): Self::SystemData) {
-//        for (_lefty, pos) in (&lefty, &mut pos).join() {
-//            pos.x -= 1;
-//            if pos.x < 0 {
-//                pos.x = 79
-//            }
-//        }
-//    }
-//}
-
 impl State {
     fn run_systems(&mut self) {
-        //let mut lw = LeftWalker {};
-        //lw.run_now(&self.ecs);
+        let mut vis = VisibilitySystem {};
+        vis.run_now(&self.ecs);
         self.ecs.maintain();
     }
 }
@@ -62,10 +52,11 @@ fn main() -> rltk::BError {
     gs.ecs.register::<Position>();
     gs.ecs.register::<Renderable>();
     gs.ecs.register::<Player>();
+    gs.ecs.register::<Viewshed>();
 
-    let (rooms, map) = new_map_rooms_and_corridors();
+    let map = Map::new_map_rooms_and_corridors();
+    let (player_x, player_y) = map.rooms[0].center();
     gs.ecs.insert(map);
-    let (player_x, player_y) = rooms[0].center();
 
     gs.ecs
         .create_entity()
@@ -79,19 +70,10 @@ fn main() -> rltk::BError {
             bg: RGB::named(rltk::BLACK),
         })
         .with(Player {})
+        .with(Viewshed {
+            visible_tiles: Vec::new(),
+            range: 8,
+        })
         .build();
-
-    //for i in 0..10 {
-    //    gs.ecs
-    //        .create_entity()
-    //        .with(Position { x: i * 7, y: 20 })
-    //        .with(Renderable {
-    //            glyph: rltk::to_cp437('1'),
-    //            fg: RGB::named(rltk::RED),
-    //            bg: RGB::named(rltk::BLACK),
-    //        })
-    //        .with(LeftMover {})
-    //        .build();
-    //}
     rltk::main_loop(context, gs)
 }
